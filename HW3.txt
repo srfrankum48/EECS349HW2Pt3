@@ -1,0 +1,398 @@
+Samantha Frankum srf48
+EECS 349: Computer Security
+
+Problem 1: ________________________________________________________________________________________________________________
+C CODE:
+#include <stdio.h>
+int main(int argc, const char **argv, const char **envp) {
+    int x = 3, y = 5, z = 0;
+
+    z = (x*y) - ((x + (x >> 31)) >> 1);
+    printf("%d", z);
+
+    return 0;
+}
+
+ASSEMBLY CODE:
+The first lines declare current variables:
+argc = dword ptr 8 		Declares argc as a 32 bit dword variable with an offset of 8 fromstack base
+argv = dword ptr 0Ch		Declares argv as a 32 bit dword variable with an offset of 0ch
+envp = dword ptr 10h 		Declares envp as a 32 bit dword variable with an offset of 10h
+
+push ebp 			Push ebp onto the stack
+move ebp,esp 			Move value at esp register into the ebp register
+and esp,0FFFFFFF0h 		Aligns stack on 16 byte boundary by zeroing out first and last byte
+sub esp,20h 			Subtract 20h (aka 32 in decimal) from the register esp (which now will have a value of -32)
+call ___main 			Call main function
+mov dword ptr[esp+1Ch], 3 	Move 3 to ptr array at location [esp+1Ch]. This means that ptr[-4] is now 3
+mov dword ptr[esp+18h], 5 	Move 5 to ptr array at location [esp+18h]. This means that ptr[-8] is now 5
+mov dword ptr[esp+14h], 0 	Move 0 to ptr array at location [esp+14h]. This means that ptr[-12] is now 0. 
+These previous 3 lines set up local variables
+
+mov eax,[esp+1Ch] 		Move [esp+1Ch] (currently 3) to eax so it 3 now
+imul eax,[esp+18h] 		Signed multiplication on eax (curr 3) and [esp+18h] (curr 5) = 15 is the result in eax
+mov edx,eax 			Move val at eax to edx so it now stores 15
+mov eax,[esp+1Ch] 		Move val of [esp+1Ch] to the eax register (so eax now 3)
+mov ecx,eax 			Move val of eax to the ecx register
+shr ecx, 1Fh 			Shift bits of ecx by the value of 1Fh which is 31 in decimal which means we getting that last bit
+add eax,ecx 			Add val of ecx to the eax register (0 + 3 = 3)
+sar eax,1 			Shift bits of eax right by 1 or divide by 2 (eax = 1) 
+sub edx,eax 			Subtract val of eax from edx (15 - 1 = 14 = edx)
+mov eax,edx 			Move val of edx to eax (eax = 14)
+mov [esp+14h],eax 		Move val of eax to stack location [esp+14h] and so that will now store 14
+mov eax,[esp+14h] 		Move val [esp+14h] to the eax register (eax = 14)
+mov [esp+4],eax 		Move val of eax to [esp+4] so it now stores 14
+mov dword ptr[esp], offset aD ; "%d"	Print the value of ptr[esp] (14)
+call __printf 			Call func printf 
+mov eax,0 			Move 0 to eax 
+leave 				Last three lines finish main function
+retn
+_main endp
+
+
+Problem 2: ____________________________________________________________________________________________
+
+C CODE:
+This code declares an array and then loops to find the max value and stores it in the 1st spot
+
+#include <stdio.h>
+int main(int argc, const char **argv, const char **envp) 
+{
+    int x[] = {12,15,221,3,432,54,16,67,0,0};
+
+    while(x[9] < 7)
+    {
+        if(x[9] > (-64 + (x[9]*4) + 24))
+	{
+            x[8] = (-64 + (x[9]*4) + 24);
+        }
+        x[9]++;
+    }
+
+    printf("%d", x[9]);
+    return 0;
+}
+
+ASSEMBLY CODE:
+argc = dword ptr 8 		Declares argc as a 32 bit dword variable with an offset of 8 fromstack base
+argv = dword ptr 0Ch		Declares argv as a 32 bit dword variable with an offset of 0ch
+envp = dword ptr 10h 		Declares envp as a 32 bit dword variable with an offset of 10h
+
+push ebp 			Push ebp to stack
+mov ebp,esp 			Move val of esp into the ebp register
+and esp,0fffffff0h 		Aligns stack on a 16 byte boundary
+sub esp,40h 			Subtract val 40h (64 in decimal) from ebp so it now stores -64
+call ___main 			Call main function
+
+Next chunk of lines create an array: [12, 15, 221, 3, 432, 54, 16, 67, 0, 0]
+mov dword ptr[esp+18h],0Ch 	Move val 0Ch (12 in decimal) to ptr[-64 + 24] 
+mov dword ptr[esp+1Ch],0Fh 	Move val 0Fh (15 in decimal) to ptr[-64 + 28]
+mov dword ptr[esp+20h],0DDh 	Move val 0DDh (221 in decimal) to ptr[-64 + 32] 
+mov dword ptr[esp+24h],3 	Move val 3h (3 in decimal) to ptr[-64 + 36] 
+mov dword ptr[esp+28h],1B0h 	Move val 1B0h (432 in decimal) to ptr[-64 + 40]
+mov dword ptr[esp+2Ch],36h 	Move val 36h (54 in decimal) to ptr[-64 + 44] 
+mov dword ptr[esp+30h],10h 	Move val 10h (16 in decimal) to ptr[-64 + 48] 
+mov dword ptr[esp+34h],43h 	Move val 43h (67 in decimal) to ptr[-64 + 52]
+mov dword ptr[esp+3Ch],0 	Move val 0h to ptr[-64 + 56]
+mov dword ptr[esp+38h],0 	Move val 0h to ptr[-64 + 60]
+jmp short loc_40157F 		Jump to loc_40157F in memory
+
+
+loc_401560	;CODE XREF: __main+84j
+mov eax,[esp+38h] 		Move val at end of array into eax 
+mov eax,[esp+eax*4+18h] 	Move val of [-40h+(eax*4)+18h] into eax 
+cmp eax,[esp+3Ch] 		Compare val of second to last element in array with eax 
+jle short loc_40157A 		if eax is < [-40h+(eax*4)+18h] {jump to memory location loc_40157A}
+mov eax,[esp+38h] 		else { move last value of array into eax }
+mov eax,[esp+eax*4+18h]		Move val of [40h+(eax*4)+18h] into eax 
+mov [esp+3Ch],eax 		Move val of eax into 2nd to last val of array
+
+
+loc_40157A	;CODE XREF: __main+5Ej
+add dword ptr[esp+38h],1 	Add 1 to last value in array
+
+
+loc_40157F	:CODE XREF: __main+5Ej
+cmp dword ptr[esp+38h],7 	Compare the last val of array with 7
+jle short loc_401560 		if val < 7 {jump to memory location loc_401560}
+mov eax,[esp+3Ch]  		else {move val of 2nd to last val in the array into eax }
+mov [esp+4],eax 		Move val of eax into [esp+4]
+mov dword ptr[esp], offset aD ; "%d" Print 1st val of array, 432
+call __printf
+mov eax,0
+leave
+retn
+endp
+
+Problem 3: ______________________________________________________________________________________________________________________
+
+C CODE:
+int main(int argc, const char **argv, const char **envp) {
+    int x = 100;
+    while(x<=999){
+        int z = 1374389535;
+        z = z*z;
+        z = z >> 5;
+        z = z - (x >> 32);
+        z = -100 + z;
+        int y = (1717986919*1717986919 / 4 - (x >>32));
+        y = y/4;
+        y = y+y;
+        y = y+y-x;
+        if(z*z*z + y*y*y + x*x*x<=x){
+            printf("x = %d ",x);
+            printf("y = %d ", y);
+            printf("z = %d \n", z);
+            
+        }     
+        x+=1;
+    }
+    return 0;
+}
+
+ASSEMBLY:
+1st 3 lines declare vars for the program:
+argc = dword ptr 0
+argv = dword ptr 0Ch
+envp = dword ptr 10h
+
+push ebp 			Pushes ebp to stack
+mov ebp,esp 			Move val of esp into ebp 
+and esp,0FFFFFFF0h 		Aligns stack on a 16 byte boundary
+sub, esp, 20h 			Subtract 20h from esp so now -20h
+call ___main 			Call main function
+mov dword ptr[esp+1Ch],64h 	Move val 64h to memory address ptr[-20h+1Ch]
+jmp loc_4015d6 			Jump to memory location loc_4015d6
+--------------------
+loc_40151B	;CODE XREF: _main+DEj
+mov ecx,[esp+1Ch] 		Move val of [esp+1Ch] which is 64h to ecx
+mov edx,51EB851Fh 		Move val 51EB851Fh (1374389535 in decimal) to edx
+mov eax,ecx 			Move val of ecx to eax
+imul edx 			Signed multiply edx with edx (edx*edx = = 1.8889466e+18). Store it in edx register. 
+sar edx,5 			Shift edx right by 5 bits
+mov eax,ecx 			Move val of ecx to eax 
+sar eax,1Fh 			Shift eax to right by 1Fh bits and store in eax
+sub edx,eax 			Subtract val of eax from edx and store in edx 
+mov eax,edx 			Move val of edx to eax 
+mov [esp+18h], eax 		Move val of eax to memory location [-64h+18h]
+mov eax, [esp+18h] 		Move val from memory location [-64h+18h] to eax
+imul edx,eax,-64h 		Signed multiply of -64h*eax and store in edx 
+mov eax,[esp+1Ch] 		Move val of [-4] which is 64h to eax
+lea ecx,[edx+eax] 		Compute effective address of [edx+eax] and store in 1st operand, ecx
+mov edx,66666667h 		Move val 666666667h (1717986919 in decimal) to edx (now stores 1717986919)
+mov eax,ecx 			Move val of ecx to eax
+imul edx 			Signed multiply of edx with edx and store it in edx (edx now stores 2.9514791e+18)
+sar edx,2 			Shift bits of edx to right twice
+mov eax,ecx 			Move val of ecx to eax 
+sar eax,1Fh 			Shift bits of eax right by 1Fh bits (31 in decimal) and clears most significant bit
+sub edx,eax 			Subtract val of eax from edx and store back in edx 
+mov eax,edx 			Move val of edx to eax 
+mov [esp+14h],eax 		Move val of eax to memory address [-64h+14h]
+mov ecx,[esp+1Ch] 		Move val of [-64h+1Ch] to ecx 
+mov edx,66666667H 		Move val of 666666667H (1717986919 in decimal) to edx
+mov eax,ecx 			Move val of ecx to eax
+imul edx 			Signed multiply of edx with edx and store in edx
+sar edx,2 			Shift bits of edx to right twice and clear most significant bit
+mov eax,ecx 			Move val of ecx to eax
+sar eax,1Fh 			Shift bits of eax to right by 1Fh (31 in decimal) and clear most significant bit
+sub edx,eax 			Subtract val of eax from edx and store in edx
+mov eax,edx 			Move val of edx to eax register
+shl eax,2 			Shift bits of eax to left twice and clear least significant bit
+add eax,edx 			Add val of edx with eax and store in eax 
+add eax,eax 			Add val of eax with eax and store in eax 
+sub ecx,eax 			Subtract val of eax from ecx and store in ecx
+mov eax,ecx 			Move val of ecx to eax 
+mov [esp+10h],eax 		Move val of eax to memory address [esp+10h]
+mov eax,[esp+18h] 		Move val of memory address [esp+18h] to eax 
+imul eax,[esp+18h] 		Signed multiply of memory address [esp+18h] with val of eax and store in eax 
+imul eax,[esp+18h] 		Signed multiply of memory address [esp+18h] with val of eax and store in eax 
+mov edx,eax 			Move val of eax to edx 
+mov eax,[esp+14h] 		Move val of memory address [esp+14h] to eax 
+imul eax,[esp+14h] 		Signed multiply of eax with memory address [esp+14h] and store in eax 
+imul eax,[esp+14h] 		Signed multiply of eax with memory address [esp+14h] and store in eax 
+add edx,eax 			Add val of eax with edx and store in edx 
+mov eax,[esp+10h] 		Move val of memory address [esp+10h] to eax 
+imul eax,[esp+10h] 		Signed multiply of eax and memory address [esp+10h] and store in eax 
+imul eax,[esp+10h] 		Signed multiply of eax and memory address [esp+10h] and store in eax 
+add eax,edx 			Add val of edx with eax and store in eax 
+cmp eax,[esp+1Ch] 		Compare val of eax with memory address [esp+1Ch]
+jnz short loc_4015D1 		if not zero {Jump to memory location loc_4015D1 }
+mov eax,[esp+1Ch] 		else {move value of memory address [esp+1Ch] to eax }
+mov [esp+4],eax 		Move val of eax to memory address [esp+4] 
+mov dword ptr[esp], offset aD ; "%d " 	Print val of ptr[esp]
+call _printf 			calls printf
+
+
+loc_4015D1	;CODE XREF: _main+BBj
+add dword ptr[esp+1Ch],1 	Adds 1 to value of ptr[esp+1Ch]
+
+
+loc_4015D6	:CODE XREFL: _main+16j
+cmp dword ptr[esp+1Ch], 3E7h 	Compare value of 3E7h (999 in decimal) to ptr[-4]
+jle loc_40151B 			if ptr[-4] is < 3E7h {jump to memory location loc_40151B }
+mov eax,0 			Else {end the program and return}
+leave
+retn
+endp
+
+Problem 4: _________________________________________________________________________________________________________
+
+C CODE:
+Didnt finish this cuz it started to get too complicated and I ran out of time. Know it should have 3 nested whiles
+int main(int argc, const char **argv, const char **envp) {
+    int x = 7;
+    int y = 100;
+    int z = 0; 
+
+    while(y>0){
+	...
+	proc1();
+    }
+
+    return 0;
+}
+
+void proc1(int *,int,int){
+     while(){
+	while(){
+	}
+     }
+}
+
+ASSEMBLY:
+var19C = dword ptr -19Ch	Declares var19C as a 32 bit dword variable with an offset of -19Ch fromstack base
+argc = dword ptr 0		Declares argc as a 32 bit dword variable with an offset of 8 fromstack base
+argv = dword ptr 0Ch		Declares argv as a 32 bit dword variable with an offset of 0ch
+envp = dword ptr 10h 		Declares envp as a 32 bit dword variable with an offset of 10h
+
+push ebp 			Pushes ebp to stack
+mov ebp,esp 			Move val of esp into ebp 
+and esp,0FFFFFFF0h 		Aligns stack on a 16 byte boundary
+sub esp, 1B0h			Subtract 1B0h from esp so that esp = -1B0h (-432 in decimal)
+
+call ___main			Call main function
+mov dword ptr [esp+1A8h], 7	Move val 7 to ptr[-432 + 424] = ptr[-8] = 7
+mov dword ptr [esp+1A4h], 64h	Move val 64h (100 in decimal) to ptr[-432 + 420] = ptr[-12] = 100
+mov dword ptr[esp+1ACh], 0	Move val 0 to ptr[-432 + 428] = ptr[-4] = 0
+jmp short loc_401619		Jump to loc_401619 in memory
+
+loc_401619
+mov eax, [esp+1ACh]		Move [esp + 1ACh] to eax; eax = 100
+cmp eax, [esp+1A4h]]		Compare [esp+1A4h] to eax
+jl short loc_4015FC		Jump if less 
+
+loc_4015FC
+mov eax, [esp+1ACh]		Move [esp + 1ACh] to eax
+lea edx, [eax+1]		Load Effective Address [eax+1] to edx 
+mov eax,[esp+1ACh]		Move [esp + 1ACh] to eax
+mov [esp+eax*4+14h], edx	Move edx to [esp+eax*4+14h]
+add dword ptr [esp+1ACh], 1	Adds 1 to value of ptr[esp+1Ch] 
+goto loc_401619
+
+mov eax, [esp+1A8h]		Move [esp+1A8h] to eax
+mov [esp+8], eax	;int	Move eax to [esp+8]
+mov eax, [esp+1A4h]		Move [esp+1A4h] to eax
+mov [esp+4], eax	;int	Move eax to [esp+4]
+lea eax,[esp+1B0h+var_19C]	Load Effective Address [esp+1B0h+var_19C] to eax 
+mov [esp],eax	;int *		Move eax to [esp]
+call __Z5proc1Piii	;proc1(int *, int, int)		Call proc1
+mov [esp+4],eax			Move eax to [esp+4]
+mov dword ptr [esp], offset aD	;"%d\n"			print
+call __printf
+mov eax,0
+leave
+retn
+_main endp
+
+__Z5proc1Piii   proc near  
+
+1st lines declare vars for the program:
+var_10          = dword ptr -10h 	Declares as a 32 bit dword variable with an offset of -10h fromstack base
+var_C           = dword ptr -0Ch	Declares as a 32 bit dword variable with an offset of -0Ch fromstack base
+var_8           = dword ptr -8		Declares as a 32 bit dword variable with an offset of -8 fromstack base
+var_4           = dword ptr -4		Declares as a 32 bit dword variable with an offset of -4 fromstack base
+arg_0           = dword ptr  8		Declares as a 32 bit dword variable with an offset of 8 fromstack base
+arg_4           = dword ptr  0Ch	Declares as a 32 bit dword variable with an offset of 0Ch fromstack base
+arg_8           = dword ptr  10h	Declares as a 32 bit dword variable with an offset of 10h fromstack base
+
+push ebp 			Pushes ebp to stack
+mov ebp,esp 			Move val of esp into ebp 
+sub     esp, 10h		Subtract 10h (16 in decimal) from esp 
+mov     [ebp+var_C], 0		Move 0 to [ebp + var_C]
+mov     [ebp+var_10], 0		Move 0 to [ebp + var_10]
+mov     [ebp+var_4], 0		Move 0 to [ebp + var_4]
+jmp     loc_4015B7		Jump to location in memory loc_4015B7
+--------------------------------------------------------------------------
+
+loc_401520:                             ; CODE XREF: proc1(int *,int,int)+BD↓j
+mov     [ebp+var_8], 1			Move 1 to [ebp+var_8]
+jmp     short loc_40155E		Jump to location in memory loc_40155E
+---------------------------------------------------------------------------
+loc_401529:                             ; CODE XREF: proc1(int *,int,int)+64↓j
+jmp     short loc_401538		Jump to location in memory loc_401538
+ ---------------------------------------------------------------------------
+
+ loc_40152B:                             ; CODE XREF: proc1(int *,int,int)+4B↓j
+mov     eax, [ebp+var_C]		Move [ebp + var_C] to eax
+add     eax, 1				Add 1 to eax
+cdq					Convert Word to Doubleword/Convert Doubleword to Quadword
+idiv    [ebp+arg_4]			Signed Divide
+mov     [ebp+var_C], edx		Move edx to [ebp+var_C]
+
+loc_401538:                             ; CODE XREF: proc1(int *,int,int):loc_401529↑j
+mov     eax, [ebp+var_C]		Move [ebp+var_C] to eax
+lea     edx, ds:0[eax*4]		Load Effective Address ds:0[eax*4] to edx
+mov     eax, [ebp+arg_0]		Move [ebp+arg_0] to eax
+add     eax, edx			Add edx to eax
+mov     eax, [eax]			Move [eax] to eax
+test    eax, eax			Logical Compare eax to eax
+jz      short loc_40152B		Jump if zero to loc_40152B
+add     [ebp+var_8], 1			Add 1 to [ebp+var_8]
+mov     eax, [ebp+var_C]		Move [ebp+var_C] to eax
+add     eax, 1				Add 1 to eax
+cdq
+idiv    [ebp+arg_4]			Signed divide [ebp+arg_4]
+mov     [ebp+var_C], edx		Move edx to [ebp+var_C]
+
+loc_40155E:                             ; CODE XREF: proc1(int *,int,int)+27↑j
+mov     eax, [ebp+var_8]		Move [ebp + var_8] to eax
+cmp     eax, [ebp+arg_8]		Compare [ebp+arg_8] to eax
+jl      short loc_401529		jump if less to loc_401529
+jmp     short loc_401575		Jump to loc_401575
+ ---------------------------------------------------------------------------
+loc_401568:                             ; CODE XREF: proc1(int *,int,int)+88↓j
+mov     eax, [ebp+var_C]		Move [ebp+var_C] to eax
+add     eax, 1				Add 1 to eax
+cdq
+idiv    [ebp+arg_4]			Signed divide [ebp+arg_4]
+mov     [ebp+var_C], edx		Move edx to [ebp+var_C] 
+
+loc_401575:                             ; CODE XREF: proc1(int *,int,int)+66↑j
+mov     eax, [ebp+var_C]		Move [ebp+var_C] to eax
+lea     edx, ds:0[eax*4]			
+mov     eax, [ebp+arg_0]		Move [ebp+arg_0] to eax
+add     eax, edx			Add edx and eax
+mov     eax, [eax]			Move [eax] to eax
+test    eax, eax			Logical Compare eax to eax
+jz      short loc_401568		Jump if zero to loc_40152B
+mov     eax, [ebp+var_C]		Move [epb+var_C] to eax
+lea     edx, ds:0[eax*4]		
+mov     eax, [ebp+arg_0]		Move [epb+arg_0] to eax
+add     eax, edx			Add edx to eax
+mov     eax, [eax]			Move [eax] to eax
+mov     [ebp+var_10], eax		Move eax to [ebp+var_10]
+mov     eax, [ebp+var_C]		Move [ebp+var_C] to eax
+lea     edx, ds:0[eax*4]
+mov     eax, [ebp+arg_0]		Move [ebp+arg_0] to eax
+add     eax, edx			Add eax and edx
+mov     dword ptr [eax], 0		Move val 0 to ptr[eax]
+add     [ebp+var_4], 1			Add 1 to [epb+var_4]
+
+loc_4015B7:                             ; CODE XREF: proc1(int *,int,int)+1B↑j
+mov     eax, [ebp+var_4]
+cmp     eax, [ebp+arg_4]
+jl      loc_401520
+mov     eax, [ebp+var_10]
+leave
+retn
+ __Z5proc1Piii   endp
